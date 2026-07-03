@@ -2,7 +2,8 @@ import 'package:fl_clash/common/common.dart';
 import 'package:fl_clash/enum/enum.dart';
 import 'package:fl_clash/models/models.dart';
 import 'package:fl_clash/plugins/app.dart';
-import 'package:fl_clash/providers/config.dart';
+import 'package:fl_clash/providers/providers.dart';
+import 'package:fl_clash/core/controller.dart';
 import 'package:fl_clash/state.dart';
 import 'package:fl_clash/widgets/widgets.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +39,51 @@ class TrackerInfoItem extends ConsumerWidget {
     return '${trackerInfo.start.getLastUpdateTimeDesc(context)} · $progress${traffic.desc}';
   }
 
+  void _handleAddRule(WidgetRef ref, String target, String policy) {
+    final profileId = ref.read(currentProfileIdProvider);
+    if (profileId == null) return;
+    
+    final rule = Rule.init().copyWith(
+      ruleAction: RuleAction.DOMAIN_SUFFIX,
+      content: target,
+      ruleTarget: policy,
+    );
+    
+    ref.read(profileAddedRulesProvider(profileId).notifier).put(rule);
+    
+    ref.read(setupActionProvider.notifier).applyProfileDebounce(force: true, silence: false);
+    
+    coreController.closeConnection(trackerInfo.id);
+  }
+
+  void _showContextMenu(BuildContext context, WidgetRef ref, Offset position) async {
+    final host = trackerInfo.metadata.host;
+    final ip = trackerInfo.metadata.destinationIP;
+    final target = host.isNotEmpty ? host : ip;
+    if (target.isEmpty) return;
+
+    final appLocalizations = context.appLocalizations;
+    
+    final value = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
+      items: [
+        PopupMenuItem(
+          value: 'DIRECT',
+          child: Text('${appLocalizations.add} DIRECT'),
+        ),
+        PopupMenuItem(
+          value: 'PROXY',
+          child: Text('${appLocalizations.add} PROXY'),
+        ),
+      ],
+    );
+
+    if (value != null) {
+      _handleAddRule(ref, target, value);
+    }
+  }
+
   @override
   Widget build(BuildContext context, ref) {
     final value = ref.watch(
@@ -50,22 +96,6 @@ class TrackerInfoItem extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(trackerInfo.desc, style: context.textTheme.bodyLarge),
-        // Row(
-        //   mainAxisSize: MainAxisSize.max,
-        //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        //   spacing: 8,
-        //   children: [
-        //     Flexible(
-        //       child: Text(trackerInfo.desc, style: context.textTheme.bodyLarge),
-        //     ),
-        //     Text(
-        //       trackerInfo.start.lastUpdateTimeDesc,
-        //       style: context.textTheme.bodySmall?.copyWith(
-        //         color: context.colorScheme.onSurface.opacity60,
-        //       ),
-        //     ),
-        //   ],
-        // ),
         const SizedBox(height: 6),
         Text(
           _getSourceText(context, trackerInfo),
@@ -105,7 +135,7 @@ class TrackerInfoItem extends ConsumerWidget {
               },
             ),
           ),
-          ?trailing,
+          if (trailing != null) trailing!,
         ],
       ),
     );
@@ -139,9 +169,16 @@ class TrackerInfoItem extends ConsumerWidget {
             ),
           )
         : null;
-    return ListItem(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      onTap: () {
+    return GestureDetector(
+      onSecondaryTapDown: (details) {
+        _showContextMenu(context, ref, details.globalPosition);
+      },
+      onLongPressStart: (details) {
+        _showContextMenu(context, ref, details.globalPosition);
+      },
+      child: ListItem(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        onTap: () {
         showExtend(
           context,
           builder: (_) {
@@ -161,7 +198,7 @@ class TrackerInfoItem extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             spacing: 12,
             children: [
-              ?icon,
+              if (icon != null) icon,
               Flexible(child: title),
             ],
           ),
@@ -169,7 +206,7 @@ class TrackerInfoItem extends ConsumerWidget {
           subTitle,
         ],
       ),
-    );
+    ));
   }
 }
 
