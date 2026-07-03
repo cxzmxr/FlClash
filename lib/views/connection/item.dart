@@ -39,12 +39,12 @@ class TrackerInfoItem extends ConsumerWidget {
     return '${trackerInfo.start.getLastUpdateTimeDesc(context)} · $progress${traffic.desc}';
   }
 
-  void _handleAddRule(WidgetRef ref, String target, String policy) {
+  void _handleAddRule(WidgetRef ref, String target, String policy, {RuleAction action = RuleAction.DOMAIN_SUFFIX}) {
     final profileId = ref.read(currentProfileIdProvider);
     if (profileId == null) return;
     
     final rule = Rule.init().copyWith(
-      ruleAction: RuleAction.DOMAIN_SUFFIX,
+      ruleAction: action,
       content: target,
       ruleTarget: policy,
     );
@@ -59,8 +59,8 @@ class TrackerInfoItem extends ConsumerWidget {
   void _showContextMenu(BuildContext context, WidgetRef ref, Offset position) async {
     final host = trackerInfo.metadata.host;
     final ip = trackerInfo.metadata.destinationIP;
-    final target = host.isNotEmpty ? host : ip;
-    if (target.isEmpty) return;
+    final process = trackerInfo.metadata.process;
+    final domainTarget = host.isNotEmpty ? host : ip;
 
     final appLocalizations = context.appLocalizations;
     
@@ -68,19 +68,40 @@ class TrackerInfoItem extends ConsumerWidget {
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
       items: [
-        PopupMenuItem(
-          value: 'DIRECT',
-          child: Text('${appLocalizations.add} DIRECT'),
-        ),
-        PopupMenuItem(
-          value: 'PROXY',
-          child: Text('${appLocalizations.add} PROXY'),
-        ),
+        if (domainTarget.isNotEmpty) ...[
+          PopupMenuItem(
+            value: 'DOMAIN:DIRECT',
+            child: Text('${appLocalizations.add} DIRECT (域名/IP)'),
+          ),
+          PopupMenuItem(
+            value: 'DOMAIN:PROXY',
+            child: Text('${appLocalizations.add} PROXY (域名/IP)'),
+          ),
+        ],
+        if (process.isNotEmpty) ...[
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'PROCESS:DIRECT',
+            child: Text('${appLocalizations.add} DIRECT (进程)'),
+          ),
+          PopupMenuItem(
+            value: 'PROCESS:PROXY',
+            child: Text('${appLocalizations.add} PROXY (进程)'),
+          ),
+        ],
       ],
     );
 
     if (value != null) {
-      _handleAddRule(ref, target, value);
+      final parts = value.split(':');
+      final type = parts[0];
+      final policy = parts[1];
+      
+      if (type == 'DOMAIN' && domainTarget.isNotEmpty) {
+        _handleAddRule(ref, domainTarget, policy, action: RuleAction.DOMAIN_SUFFIX);
+      } else if (type == 'PROCESS' && process.isNotEmpty) {
+        _handleAddRule(ref, process, policy, action: RuleAction.PROCESS_NAME);
+      }
     }
   }
 
@@ -96,6 +117,22 @@ class TrackerInfoItem extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(trackerInfo.desc, style: context.textTheme.bodyLarge),
+        // Row(
+        //   mainAxisSize: MainAxisSize.max,
+        //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        //   spacing: 8,
+        //   children: [
+        //     Flexible(
+        //       child: Text(trackerInfo.desc, style: context.textTheme.bodyLarge),
+        //     ),
+        //     Text(
+        //       trackerInfo.start.lastUpdateTimeDesc,
+        //       style: context.textTheme.bodySmall?.copyWith(
+        //         color: context.colorScheme.onSurface.opacity60,
+        //       ),
+        //     ),
+        //   ],
+        // ),
         const SizedBox(height: 6),
         Text(
           _getSourceText(context, trackerInfo),
